@@ -1,8 +1,8 @@
 #!/bin/bash
 
-saw="$0"
-[ -L "$saw" ] && saw=$(readlink "$0")
-prefix=$(cd "$(dirname $saw)/.." && pwd)
+saw="${BASH_SOURCE:-$0}"
+[ -L "$saw" ] && saw=$(readlink "$saw")
+prefix=$(cd $(dirname $saw)/..; pwd)
 
 export SAW_DIR_PREFIX="$prefix"
 export SAW_DIR_BIN="$prefix/bin"
