@@ -57,5 +57,6 @@ fi
 
 instance_id=$(saw ec2 list-instances | awk '{print $1}')
 
-
-aws ssm start-session --profile $profile --target $instance_id
+if [ -n "$instance_id" ]; then
+  aws ssm start-session --profile $profile --target $instance_id
+fi
