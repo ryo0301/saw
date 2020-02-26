@@ -10,6 +10,7 @@ for opt in "$@"; do
       echo --alias-key
       echo --role-name
       echo --external-id
+      echo --no-cache
       exit
       ;;
     "--alias-key")
@@ -36,6 +37,10 @@ for opt in "$@"; do
         shift 1
       fi
       ;;
+    "--no-cache")
+      nocache=1
+      shift 1
+      ;;
   esac
 done
 
@@ -45,6 +50,7 @@ map=$(cat $SAW_DIR_CONF/accounts.json)
 alias_key=${alias_key:-"$(echo $map | jq -r .default.alias_key)"}
 role_name=${role_name:-"$(echo $map | jq -r .default.role_name)"}
 external_id=${external_id:-"$(echo $map | jq -r .default.external_id)"}
+nocache=${nocache:-0}
 
 
 if [ -z "$SAW_DEFAULT_PROFILE" ]; then
@@ -54,8 +60,13 @@ else
   profile="$SAW_DEFAULT_PROFILE"
 fi
 
+if [ $nocache -eq 1 ]; then
+  nocache_param="--no-cache"
+else
+  nocache_param=""
+fi
 
-instance_id=$(saw ec2 list-instances | awk '{print $1}')
+instance_id=$(saw ec2 list-instances --alias-key $alias_key --role-name $role_name --external-id $external_id $nocache_param | awk '{print $1}')
 
 if [ -n "$instance_id" ]; then
   aws ssm start-session --profile $profile --target $instance_id
