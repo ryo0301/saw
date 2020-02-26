@@ -10,7 +10,7 @@ for opt in "$@"; do
       echo --alias-key
       echo --role-name
       echo --external-id
-      echo --refresh
+      echo --no-cache
       exit
       ;;
     "--alias-key")
@@ -37,8 +37,8 @@ for opt in "$@"; do
         shift 1
       fi
       ;;
-    "--refresh")
-      refresh=1
+    "--no-cache")
+      nocache=1
       shift 1
       ;;
   esac
@@ -50,7 +50,7 @@ map=$(cat $SAW_DIR_CONF/accounts.json)
 alias_key=${alias_key:-"$(echo $map | jq -r .default.alias_key)"}
 role_name=${role_name:-"$(echo $map | jq -r .default.role_name)"}
 external_id=${external_id:-"$(echo $map | jq -r .default.external_id)"}
-refresh=${refresh:-0}
+nocache=${nocache:-0}
 
 cache_prefix="$SAW_DIR_CACHE/ec2/${alias_key}"
 cache_path="${cache_prefix}/instancelist"
@@ -65,7 +65,7 @@ fi
 
 
 do_desc_instances=0
-if [ $refresh -eq 1 ]; then
+if [ $nocache -eq 1 ]; then
   do_desc_instances=1
 elif [ ! -r $cache_path ]; then
   do_desc_instances=1
