@@ -75,16 +75,18 @@ else
   list=$(cat $cache_path)
 fi
 
+
+ret=0
 if [ $do_desc_instances -eq 1 ]; then
-  query='Reservations[].Instances[].{"name":Tags[?Key==`Name`].Value|[0],"instance-id":InstanceId,"instance-type":InstanceType,"state":State.Name,"private-ip":PrivateIpAddress,"public-ip":PublicIpAddress,"launch-time":LaunchTime}|sort_by(@,&"launch-time")|reverse(@)'
+  query='Reservations[].Instances[].{"1instance-id":InstanceId,"2name":Tags[?Key==`Name`].Value|[0],"3state":State.Name,"4private-ip":PrivateIpAddress,"5az":Placement.AvailabilityZone,"6instance-type":InstanceType,"7launch-time":LaunchTime,"8public-ip":PublicIpAddress}|sort_by(@,&"7launch-time")|reverse(@)'
   list=$(aws ec2 describe-instances --profile "$profile" --query "$query" --output text)
+  ret=$?
   mkdir -p $cache_prefix
   echo "$list" > $cache_path
 fi
 
-
-if [ $? -eq 0 ]; then
-  echo "$list" | peco
+if [ $ret -eq 0 ]; then
+  echo "$list" | awk '{print $1,$2,$3,$4,$5,$6,substr($7,0,19),$8}' | column -t | peco
 else
   echo "$list"
   exit 1
