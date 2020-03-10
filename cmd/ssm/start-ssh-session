@@ -1,0 +1,155 @@
+#!/bin/bash
+
+set -o pipefail
+set -e
+
+for opt in "$@"; do
+  case "$opt" in
+    "--list-options")
+      echo --list-options
+      echo --alias-key
+      echo --role-name
+      echo --external-id
+      echo --no-cache
+      echo --user
+      echo --forward
+      echo --local-port
+      echo --remote-port
+      exit
+      ;;
+    "--alias-key")
+      if [ -n "$2" ]; then
+        alias_key="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--role-name")
+      if [ -n "$2" ]; then
+        role_name="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--external-id")
+      if [ -n "$2" ]; then
+        external_id="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--no-cache")
+      nocache=1
+      shift 1
+      ;;
+    "--user")
+      if [ -n "$2" ]; then
+        os_user="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--forward")
+      if [ -n "$2" ]; then
+        case "$2" in
+          local|remote)
+            forward="$2"
+            ;;
+        esac
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--local-port")
+      if [ -n "$2" ]; then
+        local_port="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--remote-port")
+      if [ -n "$2" ]; then
+        remote_port="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+  esac
+done
+
+
+map=$(cat $SAW_DIR_CONF/accounts.json)
+
+alias_key=${alias_key:-"$(echo $map | jq -r .default.alias_key)"}
+role_name=${role_name:-"$(echo $map | jq -r .default.role_name)"}
+external_id=${external_id:-"$(echo $map | jq -r .default.external_id)"}
+nocache=${nocache:-0}
+os_user=${os_user:-"ec2-user"}
+forward=${forward:-""}
+local_port=${local_port:-"3000"}
+remote_port=${remote_port:-"3000"}
+
+
+if [ -z "$SAW_DEFAULT_PROFILE" ]; then
+  profile="${alias_key}-${role_name}"
+  saw iam assume-role --alias-key $alias_key --role-name $role_name --external-id $external_id > /dev/null
+else
+  profile="$SAW_DEFAULT_PROFILE"
+fi
+
+if [ $nocache -eq 1 ]; then
+  nocache_param="--no-cache"
+else
+  nocache_param=""
+fi
+
+instance=$(saw ec2 list-instances --alias-key $alias_key --role-name $role_name --external-id $external_id $nocache_param)
+instance_id=$(echo "$instance" | awk '{print $1}')
+az=$(echo "$instance" | awk '{print $5}')
+
+echo "Generating key pair..."
+priv_pem=$(openssl genrsa 4096 2> /dev/null)
+pub_p8=$(echo "$priv_pem" | openssl rsa -pubout 2> /dev/null | ssh-keygen -i -m pkcs8 -f /dev/stdin)
+
+temp_path=$(mktemp ~/.ssh/tmp.XXXXXXXXXX)
+echo "$priv_pem" > $temp_path
+trap "rm $temp_path" EXIT
+
+echo "Send temporary public key to $instance_id ..."
+echo "$pub_p8" | aws ec2-instance-connect send-ssh-public-key \
+  --profile $profile \
+  --instance-id $instance_id \
+  --instance-os-user $os_user \
+  --availability-zone $az \
+  --ssh-public-key file:///dev/stdin
+
+proxy_cmd="sh -c 'aws ssm start-session --profile $profile --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p'"
+ssh_cmd="ssh -i $temp_path -l $os_user -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+case "$forward" in
+  local)
+    echo "localhost:$local_port -> remotehost:$remote_port"
+    $ssh_cmd \
+    -o ProxyCommand="$proxy_cmd" \
+    -N -L $local_port:localhost:$remote_port \
+    $instance_id
+    ;;
+  remote)
+    echo "remotehost:$remote_port -> localhost:$local_port"
+    $ssh_cmd \
+    -o ProxyCommand="$proxy_cmd" \
+    -N -R $remote_port:localhost:$local_port \
+    $instance_id
+    ;;
+  *)
+    $ssh_cmd \
+    -o ProxyCommand="$proxy_cmd" \
+    $instance_id
+    ;;
+esac
