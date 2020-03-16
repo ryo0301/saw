@@ -111,6 +111,7 @@ else
 fi
 
 instance=$(saw ec2 list-instances --alias-key $alias_key --role-name $role_name --external-id $external_id $nocache_param)
+[ -z "$instance" ] && exit
 instance_id=$(echo "$instance" | awk '{print $1}')
 az=$(echo "$instance" | awk '{print $5}')
 
@@ -119,8 +120,8 @@ priv_pem=$(openssl genrsa 4096 2> /dev/null)
 pub_p8=$(echo "$priv_pem" | openssl rsa -pubout 2> /dev/null | ssh-keygen -i -m pkcs8 -f /dev/stdin)
 
 temp_path=$(mktemp ~/.ssh/tmp.XXXXXXXXXX)
-echo "$priv_pem" > $temp_path
 trap "rm $temp_path" EXIT
+echo "$priv_pem" > $temp_path
 
 echo "Send temporary public key to $instance_id ..."
 echo "$pub_p8" | aws ec2-instance-connect send-ssh-public-key \
