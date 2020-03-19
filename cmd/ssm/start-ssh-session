@@ -120,7 +120,7 @@ priv_pem=$(openssl genrsa 4096 2> /dev/null)
 pub_p8=$(echo "$priv_pem" | openssl rsa -pubout 2> /dev/null | ssh-keygen -i -m pkcs8 -f /dev/stdin)
 
 temp_path=$(mktemp ~/.ssh/tmp.XXXXXXXXXX)
-trap "rm $temp_path" EXIT
+trap "echo; rm $temp_path; date" EXIT
 echo "$priv_pem" > $temp_path
 
 echo "Send temporary public key to $instance_id ..."
