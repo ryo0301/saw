@@ -116,25 +116,23 @@ instance_id=$(echo "$instance" | awk '{print $1}')
 az=$(echo "$instance" | awk '{print $5}')
 
 echo "Generating key pair..."
-priv_pem=$(openssl genrsa 4096 2> /dev/null)
-pub_p8=$(echo "$priv_pem" | openssl rsa -pubout 2> /dev/null | ssh-keygen -i -m pkcs8 -f /dev/stdin)
-
-temp_path=$(mktemp ~/.ssh/tmp.XXXXXXXXXX)
-trap "echo; rm $temp_path; date" EXIT
-echo "$priv_pem" > $temp_path
+temp_path=$(mktemp -u ~/.ssh/tmp.XXXXXXXXXX)
+ssh-keygen -t rsa -b 4096 -N '' -C '' -f $temp_path > /dev/null
+trap "rm $temp_path $temp_path.pub; echo; date" EXIT
 
 echo "Send temporary public key to $instance_id ..."
-echo "$pub_p8" | aws ec2-instance-connect send-ssh-public-key \
+aws ec2-instance-connect send-ssh-public-key \
   --profile $profile \
   --instance-id $instance_id \
   --instance-os-user $os_user \
   --availability-zone $az \
-  --ssh-public-key file:///dev/stdin
+  --ssh-public-key file://$temp_path.pub
 
 proxy_cmd="sh -c 'aws ssm start-session --profile $profile --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p'"
 ssh_cmd="ssh -i $temp_path -l $os_user -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 case "$forward" in
   local)
+    date
     echo "localhost:$local_port -> remotehost:$remote_port"
     $ssh_cmd \
     -o ProxyCommand="$proxy_cmd" \
@@ -142,6 +140,7 @@ case "$forward" in
     $instance_id
     ;;
   remote)
+    date
     echo "remotehost:$remote_port -> localhost:$local_port"
     $ssh_cmd \
     -o ProxyCommand="$proxy_cmd" \
