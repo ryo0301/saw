@@ -7,32 +7,13 @@ for opt in "$@"; do
   case "$opt" in
     "--list-options")
       echo --list-options
-      echo --alias-key
-      echo --role-name
-      echo --external-id
-      echo --token-code
+      echo --profile
       echo --stream-name
       exit
       ;;
-    "--alias-key")
+    "--profile")
       if [ -n "$2" ]; then
-        alias_key="$2"
-        shift 2
-      else
-        shift 1
-      fi
-      ;;
-    "--role-name")
-      if [ -n "$2" ]; then
-        role_name="$2"
-        shift 2
-      else
-        shift 1
-      fi
-      ;;
-    "--external-id")
-      if [ -n "$2" ]; then
-        external_id="$2"
+        profile="$2"
         shift 2
       else
         shift 1
@@ -46,32 +27,17 @@ for opt in "$@"; do
         shift 1
       fi
       ;;
-    "--token-code")
-      if [ -n "$2" ]; then
-        token_code="$2"
-        shift 2
-      else
-        shift 1
-      fi
-      ;;
   esac
 done
 
-
-map=$(cat $SAW_DIR_CONF/accounts.json)
-
-alias_key=${alias_key:-"$(echo $map | jq -r .default.alias_key)"}
-role_name=${role_name:-"$(echo $map | jq -r .default.role_name)"}
-external_id=${external_id:-"$(echo $map | jq -r .default.external_id)"}
-token_code=${token_code:-""}
-
+profile=${profile:-"default"}
 
 if [ -z "$stream_name" ]; then
-  stream_name=$(saw kinesis list-streams --alias-key $alias_key --role-name $role_name --external-id $external_id --token-code $token_code)
+  stream_name=$(saw kinesis list-streams --profile $profile)
 fi
 
 
-shards=$(saw kinesis list-shards --alias-key $alias_key --role-name $role_name --external-id $external_id --stream-name $stream_name --token-code $token_code)
+shards=$(saw kinesis list-shards --profile $profile --stream-name $stream_name)
 
 num=$(echo "$shards" | wc -l)
 if [ $(($num)) -ne 2 ]; then
@@ -103,14 +69,6 @@ elif [ "$(echo "$k_end2 + 1" | bc)" == "$k_start1" ]; then
 else
   echo "Selected shards are not adjacent" 1>&2
   exit 1
-fi
-
-
-if [ -z "$SAW_DEFAULT_PROFILE" ]; then
-  profile="${alias_key}-${role_name}"
-  saw iam assume-role --alias-key $alias_key --role-name $role_name --external-id $external_id --token-code $token_code > /dev/null
-else
-  profile="$SAW_DEFAULT_PROFILE"
 fi
 
 

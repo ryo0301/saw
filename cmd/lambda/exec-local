@@ -7,9 +7,7 @@ for opt in "$@"; do
   case "$opt" in
     "--list-options")
       echo --list-options
-      echo --alias-key
-      echo --external-id
-      echo --token-code
+      echo --profile
       echo --function-name
       echo --function-region
       echo --function-module-path
@@ -19,25 +17,9 @@ for opt in "$@"; do
       echo --reload-config
       exit
       ;;
-    "--alias-key")
+    "--profile")
       if [ -n "$2" ]; then
-        alias_key="$2"
-        shift 2
-      else
-        shift 1
-      fi
-      ;;
-    "--external-id")
-      if [ -n "$2" ]; then
-        external_id="$2"
-        shift 2
-      else
-        shift 1
-      fi
-      ;;
-    "--token-code")
-      if [ -n "$2" ]; then
-        token_code="$2"
+        profile="$2"
         shift 2
       else
         shift 1
@@ -106,27 +88,12 @@ if [ -z "$func_name" ]; then
 fi
 
 
-map=$(cat $SAW_DIR_CONF/accounts.json)
-
-alias_key=${alias_key:-"$(echo $map | jq -r .default.alias_key)"}
-external_id=${external_id:-"$(echo $map | jq -r .default.external_id)"}
+profile=${profile:-"default"}
 reload_config=${reload_config:-0}
-
-account_id=$(echo $map | jq -r .accounts.$alias_key.account_id)
-default_region="$(echo $map | jq -r .default.region)"
 
 invoker="$SAW_DIR_LIB/lambda/invoke.js"
 cache_prefix="$SAW_DIR_CACHE/lambda/${alias_key}"
 cache_path="${cache_prefix}/${func_name}"
-
-if [ -z "$SAW_DEFAULT_PROFILE" ]; then
-  role_name="lambda-dev"
-  profile="${alias_key}-${role_name}"
-  saw iam assume-role --alias-key $alias_key --role-name $role_name --external-id $external_id > /dev/null
-else
-  profile="$SAW_DEFAULT_PROFILE"
-fi
-
 
 conf=""
 if [ -r "$cache_path" -a $reload_config -eq 0 ]; then
@@ -138,7 +105,7 @@ else
   echo "$conf" > $cache_path
 fi
 
-func_region=${func_region:-"$default_region"}
+func_region=${func_region:-"ap-northeast-1"}
 func_payload_body=${func_payload_body:-""}
 func_handler_path=${func_handler_path:-"$(pwd)/index.js"}
 func_handler_string=$(echo "$conf" | jq -r .Handler)
@@ -159,7 +126,7 @@ export AWS_LAMBDA_FUNCTION_VERSION="$func_ver"
 export AWS_LAMBDA_FUNCTION_ARN="$func_arn"
 
 
-creds=$(aws --profile $profile sts assume-role --role-arn $func_role --role-session-name in-office)
+creds=$(aws --profile $profile sts assume-role --role-arn $func_role --role-session-name saw-exec-local)
 [ $? -ne 0 ] && exit 1
 
 export AWS_ACCESS_KEY_ID=$(echo "$creds" | jq -r .Credentials.AccessKeyId)
@@ -167,7 +134,7 @@ export AWS_SECRET_ACCESS_KEY=$(echo "$creds" | jq -r .Credentials.SecretAccessKe
 export AWS_SESSION_TOKEN=$(echo "$creds" | jq -r .Credentials.SessionToken)
 
 
-if [ -n "$func_env_path" ]; then
+if [ -n "$func_env_path" -a -r "$func_env_path"]; then
   for key in $(jq -r keys[] $func_env_path); do
     export $key=$(jq -r .$key $func_env_path)
   done

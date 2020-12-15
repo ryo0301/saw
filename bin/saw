@@ -11,11 +11,6 @@ export SAW_DIR_CMD="$prefix/cmd"
 export SAW_DIR_CONF="$prefix/conf"
 export SAW_DIR_LIB="$prefix/lib"
 
-default_profile=$(jq -r .default.profile $SAW_DIR_CONF/accounts.json)
-if [ -n "$default_profile" -a "$default_profile" != "null" ]; then
-  export SAW_DEFAULT_PROFILE="$default_profile"
-fi
-
 srv=${1:-"null"} && shift
 cmd=${1:-"null"} && shift
 doc=".doc"

@@ -7,35 +7,16 @@ for opt in "$@"; do
   case "$opt" in
     "--list-options")
       echo --list-options
-      echo --alias-key
-      echo --role-name
-      echo --external-id
+      echo --profile
       echo --no-cache
-      echo --user
       echo --forward
       echo --local-port
       echo --remote-port
       exit
       ;;
-    "--alias-key")
+    "--profile")
       if [ -n "$2" ]; then
-        alias_key="$2"
-        shift 2
-      else
-        shift 1
-      fi
-      ;;
-    "--role-name")
-      if [ -n "$2" ]; then
-        role_name="$2"
-        shift 2
-      else
-        shift 1
-      fi
-      ;;
-    "--external-id")
-      if [ -n "$2" ]; then
-        external_id="$2"
+        profile="$2"
         shift 2
       else
         shift 1
@@ -44,14 +25,6 @@ for opt in "$@"; do
     "--no-cache")
       nocache=1
       shift 1
-      ;;
-    "--user")
-      if [ -n "$2" ]; then
-        os_user="$2"
-        shift 2
-      else
-        shift 1
-      fi
       ;;
     "--forward")
       if [ -n "$2" ]; then
@@ -85,11 +58,7 @@ for opt in "$@"; do
 done
 
 
-map=$(cat $SAW_DIR_CONF/accounts.json)
-
-alias_key=${alias_key:-"$(echo $map | jq -r .default.alias_key)"}
-role_name=${role_name:-"$(echo $map | jq -r .default.role_name)"}
-external_id=${external_id:-"$(echo $map | jq -r .default.external_id)"}
+profile=${profile:-"default"}
 nocache=${nocache:-0}
 os_user=${os_user:-"ec2-user"}
 forward=${forward:-""}
@@ -97,20 +66,13 @@ local_port=${local_port:-"3000"}
 remote_port=${remote_port:-"3000"}
 
 
-if [ -z "$SAW_DEFAULT_PROFILE" ]; then
-  profile="${alias_key}-${role_name}"
-  saw iam assume-role --alias-key $alias_key --role-name $role_name --external-id $external_id > /dev/null
-else
-  profile="$SAW_DEFAULT_PROFILE"
-fi
-
 if [ $nocache -eq 1 ]; then
   nocache_param="--no-cache"
 else
   nocache_param=""
 fi
 
-instance=$(saw ec2 list-instances --alias-key $alias_key --role-name $role_name --external-id $external_id $nocache_param)
+instance=$(saw ec2 list-instances --profile $profile $nocache_param)
 [ -z "$instance" ] && exit
 instance_id=$(echo "$instance" | awk '{print $1}')
 az=$(echo "$instance" | awk '{print $5}')
@@ -121,7 +83,7 @@ ssh-keygen -t rsa -b 4096 -N '' -C '' -f $temp_path > /dev/null
 trap "rm $temp_path $temp_path.pub; echo; date" EXIT
 
 echo "Send temporary public key to $instance_id ..."
-aws ec2-instance-connect send-ssh-public-key \
+AWS_PAGER= aws ec2-instance-connect send-ssh-public-key \
   --profile $profile \
   --instance-id $instance_id \
   --instance-os-user $os_user \

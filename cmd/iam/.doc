@@ -1,4 +1,0 @@
-#!/bin/bash
-
-echo "Usage: saw iam <command>"
-ls -1 $(dirname $0)

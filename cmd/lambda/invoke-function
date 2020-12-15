@@ -7,33 +7,15 @@ for opt in "$@"; do
   case "$opt" in
     "--list-options")
       echo --list-options
-      echo --alias-key
-      echo --external-id
-      echo --token-code
+      echo --profile
       echo --function-name
       echo --payload-path
       echo --output-path
       exit
       ;;
-    "--alias-key")
+    "--profile")
       if [ -n "$2" ]; then
-        alias_key="$2"
-        shift 2
-      else
-        shift 1
-      fi
-      ;;
-    "--external-id")
-      if [ -n "$2" ]; then
-        external_id="$2"
-        shift 2
-      else
-        shift 1
-      fi
-      ;;
-    "--token-code")
-      if [ -n "$2" ]; then
-        token_code="$2"
+        profile="$2"
         shift 2
       else
         shift 1
@@ -67,20 +49,8 @@ for opt in "$@"; do
 done
 
 
-map=$(cat $SAW_DIR_CONF/accounts.json)
-
-alias_key=${alias_key:-"$(echo $map | jq -r .default.alias_key)"}
-external_id=${external_id:-"$(echo $map | jq -r .default.external_id)"}
+profile=${profile:-"default"}
 output_path=${output_path:-"/dev/null"}
-
-
-if [ -z "$SAW_DEFAULT_PROFILE" ]; then
-  role_name="lambda-dev"
-  profile="${alias_key}-${role_name}"
-  saw iam assume-role --alias-key $alias_key --role-name $role_name --external-id $external_id --token-code $token_code > /dev/null
-else
-  profile="$SAW_DEFAULT_PROFILE"
-fi
 
 
 if [ -n "$payload_path" ]; then
