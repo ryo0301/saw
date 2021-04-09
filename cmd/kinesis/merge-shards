@@ -1,0 +1,117 @@
+#!/bin/bash
+
+set -o pipefail
+set -e
+
+for opt in "$@"; do
+  case "$opt" in
+    "--list-options")
+      echo --list-options
+      echo --alias-key
+      echo --role-name
+      echo --external-id
+      echo --token-code
+      echo --stream-name
+      exit
+      ;;
+    "--alias-key")
+      if [ -n "$2" ]; then
+        alias_key="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--role-name")
+      if [ -n "$2" ]; then
+        role_name="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--external-id")
+      if [ -n "$2" ]; then
+        external_id="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--stream-name")
+      if [ -n "$2" ]; then
+        stream_name="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--token-code")
+      if [ -n "$2" ]; then
+        token_code="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+  esac
+done
+
+
+map=$(cat $SAW_DIR_CONF/accounts.json)
+
+alias_key=${alias_key:-"$(echo $map | jq -r .default.alias_key)"}
+role_name=${role_name:-"$(echo $map | jq -r .default.role_name)"}
+external_id=${external_id:-"$(echo $map | jq -r .default.external_id)"}
+token_code=${token_code:-""}
+
+
+if [ -z "$stream_name" ]; then
+  stream_name=$(saw kinesis list-streams --alias-key $alias_key --role-name $role_name --external-id $external_id --token-code $token_code)
+fi
+
+
+shards=$(saw kinesis list-shards --alias-key $alias_key --role-name $role_name --external-id $external_id --stream-name $stream_name --token-code $token_code)
+
+num=$(echo "$shards" | wc -l)
+if [ $(($num)) -ne 2 ]; then
+  echo 'Has not been selected 2 lines' 1>&2
+  exit 1
+fi
+
+
+read parents1 reshard_type1 shard_id1 status1 k_start1 k_end1 s_start1 s_end1 <<< $(echo "$shards" | head -1)
+read parents2 reshard_type2 shard_id2 status2 k_start2 k_end2 s_start2 s_end2 <<< $(echo "$shards" | tail -1)
+
+errmsg=''
+if [ "$status1" != 'OPEN' ]; then
+  errmsg="Has been selected a closed shard: shardId-$(printf %012s $shard_id1)"
+elif [ "$status2" != 'OPEN' ]; then
+  errmsg="Has been selected a closed shard: shardId-$(printf %012s $shard_id2)"
+fi
+if [ -n "$errmsg" ]; then
+  echo "$errmsg" 1>&2
+  exit 1
+fi
+
+if [ "$(echo "$k_end1 + 1" | bc)" == "$k_start2" ]; then
+  shard_to_merge=shardId-$(printf %012s $shard_id1)
+  adjacent_shard_to_merge=shardId-$(printf %012s $shard_id2)
+elif [ "$(echo "$k_end2 + 1" | bc)" == "$k_start1" ]; then
+  shard_to_merge=shardId-$(printf %012s $shard_id2)
+  adjacent_shard_to_merge=shardId-$(printf %012s $shard_id1)
+else
+  echo "Selected shards are not adjacent" 1>&2
+  exit 1
+fi
+
+
+if [ -z "$SAW_DEFAULT_PROFILE" ]; then
+  profile="${alias_key}-${role_name}"
+  saw iam assume-role --alias-key $alias_key --role-name $role_name --external-id $external_id --token-code $token_code > /dev/null
+else
+  profile="$SAW_DEFAULT_PROFILE"
+fi
+
+
+aws kinesis merge-shards --profile $profile --stream-name $stream_name --shard-to-merge $shard_to_merge --adjacent-shard-to-merge $adjacent_shard_to_merge

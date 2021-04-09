@@ -1,0 +1,83 @@
+#!/bin/bash
+
+set -o pipefail
+set -e
+
+for opt in "$@"; do
+  case "$opt" in
+    "--list-options")
+      echo --list-options
+      echo --alias-key
+      echo --role-name
+      echo --external-id
+      echo --table-name
+      echo --segments
+      exit
+      ;;
+    "--alias-key")
+      if [ -n "$2" ]; then
+        alias_key="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--role-name")
+      if [ -n "$2" ]; then
+        role_name="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--external-id")
+      if [ -n "$2" ]; then
+        external_id="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--table-name")
+      if [ -n "$2" ]; then
+        table_name="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--segments")
+      if [ -n "$2" ]; then
+        segments="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+  esac
+done
+
+
+map=$(cat $SAW_DIR_CONF/accounts.json)
+
+alias_key=${alias_key:-"$(echo $map | jq -r .default.alias_key)"}
+role_name=${role_name:-"$(echo $map | jq -r .default.role_name)"}
+external_id=${external_id:-"$(echo $map | jq -r .default.external_id)"}
+total_segments=${segments:-"5"}
+
+
+if [ -z "$SAW_DEFAULT_PROFILE" ]; then
+  profile="${alias_key}-${role_name}"
+  saw iam assume-role --alias-key $alias_key --role-name $role_name --external-id $external_id > /dev/null
+else
+  profile="$SAW_DEFAULT_PROFILE"
+fi
+
+
+cmd="paste -d $'\n'"
+for i in $(seq 0 $(($total_segments - 1))); do
+  sub="aws --profile $profile dynamodb scan --query 'Count' --table-name $table_name --total-segments $total_segments --segment $i"
+  cmd="$cmd <($sub)"
+done
+eval $cmd | awk '{sum+=$1} END{print sum}'
+

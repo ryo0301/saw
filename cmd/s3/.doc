@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo "Usage: saw s3 <command>"
+ls -1 $(dirname $0)

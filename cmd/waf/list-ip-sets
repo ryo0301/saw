@@ -1,0 +1,87 @@
+#!/bin/bash
+
+set -o pipefail
+set -e
+
+for opt in "$@"; do
+  case "$opt" in
+    "--list-options")
+      echo --list-options
+      echo --alias-key
+      echo --role-name
+      echo --external-id
+      echo --prefix
+      exit
+      ;;
+    "--alias-key")
+      if [ -n "$2" ]; then
+        alias_key="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--role-name")
+      if [ -n "$2" ]; then
+        role_name="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--external-id")
+      if [ -n "$2" ]; then
+        external_id="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--prefix")
+      if [ -n "$2" ]; then
+        prefix="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+  esac
+done
+
+
+map=$(cat $SAW_DIR_CONF/accounts.json)
+
+alias_key=${alias_key:-"$(echo $map | jq -r .default.alias_key)"}
+role_name=${role_name:-"$(echo $map | jq -r .default.role_name)"}
+external_id=${external_id:-"$(echo $map | jq -r .default.external_id)"}
+
+
+if [ -z "$SAW_DEFAULT_PROFILE" ]; then
+  profile="${alias_key}-${role_name}"
+  saw iam assume-role --alias-key $alias_key --role-name $role_name --external-id $external_id > /dev/null
+else
+  profile="$SAW_DEFAULT_PROFILE"
+fi
+
+
+query="IPSets[?contains(Name,\`$prefix\`)]"
+ip_sets=$(aws waf list-ip-sets --profile "$profile" --limit 100 --query "$query" --output text 2> /dev/null | sort -k 2,2)
+
+
+num=$(echo "$ip_sets" | wc -l | tr -d ' ')
+list=$(
+  i=1
+  while read id name; do
+    msg="[$i/$num] Retrieving IP Set: $name"
+    echo -n "$msg" 1>&2
+    aws waf get-ip-set --profile $profile --ip-set-id $id --output text 2> /dev/null | awk "/IPSETDESCRIPTORS/{print \"$name \" \$3}" | sort -n -t '.' -k 1,1 -k 2,2 -k 3,3 -k 4,4
+    echo -n $'\r' 1>&2
+    printf "%${#msg}s" ' ' 1>&2
+    echo -n $'\r' 1>&2
+    ((i++))
+  done < <(echo "$ip_sets")
+)
+
+if [ -n "$list" ]; then
+  echo "$list" | peco
+fi

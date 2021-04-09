@@ -1,0 +1,11 @@
+{
+  "default": {
+    "alias_key": "mykey",
+    "user": "ec2-user"
+  },
+  "keymap": {
+    "mykey": {
+      "ec2-user": "my.pem"
+    }
+  }
+}

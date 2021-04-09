@@ -1,0 +1,91 @@
+#!/bin/bash
+
+set -o pipefail
+set -e
+
+for opt in "$@"; do
+  case "$opt" in
+    "--list-options")
+      echo --list-options
+      echo --alias-key
+      echo --role-name
+      echo --external-id
+      echo --refresh
+      exit
+      ;;
+    "--alias-key")
+      if [ -n "$2" ]; then
+        alias_key="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--role-name")
+      if [ -n "$2" ]; then
+        role_name="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--external-id")
+      if [ -n "$2" ]; then
+        external_id="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--refresh")
+      refresh=1
+      shift 1
+      ;;
+  esac
+done
+
+
+map=$(cat $SAW_DIR_CONF/accounts.json)
+
+alias_key=${alias_key:-"$(echo $map | jq -r .default.alias_key)"}
+role_name=${role_name:-"$(echo $map | jq -r .default.role_name)"}
+external_id=${external_id:-"$(echo $map | jq -r .default.external_id)"}
+refresh=${refresh:-0}
+
+cache_prefix="$SAW_DIR_CACHE/ec2/${alias_key}"
+cache_path="${cache_prefix}/instancelist"
+
+
+if [ -z "$SAW_DEFAULT_PROFILE" ]; then
+  profile="${alias_key}-${role_name}"
+  saw iam assume-role --alias-key $alias_key --role-name $role_name --external-id $external_id > /dev/null
+else
+  profile="$SAW_DEFAULT_PROFILE"
+fi
+
+
+do_desc_instances=0
+if [ $refresh -eq 1 ]; then
+  do_desc_instances=1
+elif [ ! -r $cache_path ]; then
+  do_desc_instances=1
+elif [ -z "$(find $cache_path -mmin -60)" ]; then
+  do_desc_instances=1
+else
+  list=$(cat $cache_path)
+fi
+
+if [ $do_desc_instances -eq 1 ]; then
+  query='Reservations[].Instances[].{"name":Tags[?Key==`Name`].Value|[0],"instance-id":InstanceId,"instance-type":InstanceType,"state":State.Name,"private-ip":PrivateIpAddress,"public-ip":PublicIpAddress,"launch-time":LaunchTime}|sort_by(@,&"launch-time")|reverse(@)'
+  list=$(aws ec2 describe-instances --profile "$profile" --query "$query" --output text)
+  mkdir -p $cache_prefix
+  echo "$list" > $cache_path
+fi
+
+
+if [ $? -eq 0 ]; then
+  echo "$list" | peco
+else
+  echo "$list"
+  exit 1
+fi

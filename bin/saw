@@ -1,0 +1,29 @@
+#!/bin/bash
+
+saw="$0"
+[ -L "$saw" ] && saw=$(readlink "$0")
+prefix=$(cd "$(dirname $saw)/.." && pwd)
+
+export SAW_DIR_PREFIX="$prefix"
+export SAW_DIR_BIN="$prefix/bin"
+export SAW_DIR_CACHE="$prefix/cache"
+export SAW_DIR_CMD="$prefix/cmd"
+export SAW_DIR_CONF="$prefix/conf"
+export SAW_DIR_LIB="$prefix/lib"
+
+default_profile=$(jq -r .default.profile $SAW_DIR_CONF/accounts.json)
+if [ -n "$default_profile" -a "$default_profile" != "null" ]; then
+  export SAW_DEFAULT_PROFILE="$default_profile"
+fi
+
+srv=${1:-"null"} && shift
+cmd=${1:-"null"} && shift
+doc=".doc"
+
+if   [ ! -d $SAW_DIR_CMD/$srv ]; then
+  $SAW_DIR_CMD/$doc
+elif [ ! -x $SAW_DIR_CMD/$srv/$cmd ]; then
+  $SAW_DIR_CMD/$srv/$doc
+else
+  $SAW_DIR_CMD/$srv/$cmd $@
+fi

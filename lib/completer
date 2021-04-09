@@ -1,0 +1,24 @@
+#!/bin/bash
+
+function _saw() {
+  local prefix="$HOME/.saw/cmd"
+
+  local saw=$1
+  local cur=$2
+  local prv=$3
+
+  local cmd=${COMP_WORDS[1]}
+  local subcmd=${COMP_WORDS[2]}
+
+  if [ "$prv" = "$saw" ]; then
+    COMPREPLY=( $(compgen -W "$(ls $prefix/)" -- "$cur") )
+  elif [ "$prv" = "$cmd" ]; then
+    COMPREPLY=( $(compgen -W "$(ls $prefix/$cmd)" -- "$cur") )
+  elif [ "$prv" = "$subcmd" ]; then
+    COMPREPLY=( $(compgen -W "$($saw $cmd $subcmd --list-options)" -- "$cur") )
+  elif [[ "$cur" =~ ^- ]]; then
+    COMPREPLY=( $(compgen -W "$($saw $cmd $subcmd --list-options)" -- "$cur") )
+  fi
+}
+
+complete -o default -F _saw saw

@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo "Usage: saw ec2 <command>"
+ls -1 $(dirname $0)

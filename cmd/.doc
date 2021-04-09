@@ -1,0 +1,13 @@
+#!/bin/bash
+
+echo "Usage: saw <service> <command>"
+echo
+
+cwd=$(dirname $0)
+cd $cwd
+
+services=$(ls -1)
+
+for s in $services; do
+  tree -C $s --noreport
+done

@@ -1,0 +1,88 @@
+#!/bin/bash
+
+set -o pipefail
+set -e
+
+for opt in "$@"; do
+  case "$opt" in
+    "--list-options")
+      echo --list-options
+      echo --user
+      echo --alias-key
+      echo --role-name
+      echo --external-id
+      echo --copy-cmd
+      echo --refresh
+      exit
+      ;;
+    "--user")
+      if [ -n "$2" ]; then
+        user="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--alias-key")
+      if [ -n "$2" ]; then
+        alias_key="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--role-name")
+      if [ -n "$2" ]; then
+        role_name="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--external-id")
+      if [ -n "$2" ]; then
+        external_id="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--copy-cmd")
+      copy=true
+      shift
+      ;;
+    "--refresh")
+      refresh=1
+      shift 1
+      ;;
+  esac
+done
+
+
+keymap=$(cat $SAW_DIR_CONF/keymap.json)
+user=${user:-"$(echo $keymap | jq -r .default.user)"}
+refresh=${refresh:-0}
+
+accountmap=$(cat $SAW_DIR_CONF/accounts.json)
+alias_key=${alias_key:-"$(echo $accountmap | jq -r .default.alias_key)"}
+role_name=${role_name:-"$(echo $accountmap | jq -r .default.role_name)"}
+external_id=${external_id:-"$(echo $accountmap | jq -r .default.external_id)"}
+if [ $refresh -eq 1 ]; then
+	refresh_param="--refresh"
+else
+	refresh_param=""
+fi
+
+
+key=$(echo $keymap | jq -r ".keymap.\"$alias_key\".\"$user\"")
+ip=$(saw ec2 list-instances --alias-key $alias_key --role-name $role_name --external-id $external_id $refresh_param | awk '{print $5}')
+
+if [ -n "$user" -a -n "$ip" -a -r ~/.ssh/$key ]; then
+  cmd_line="ssh -l $user -i $HOME/.ssh/$key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $ip"
+  [ "$copy" == true ] && echo $cmd_line | pbcopy
+  echo $cmd_line
+  $cmd_line
+else
+  echo "Error: user=$user, ip=$ip, key=~/.ssh/$key"
+  exit 1
+fi

@@ -1,0 +1,108 @@
+#!/bin/bash
+
+set -o pipefail
+set -e
+
+for opt in "$@"; do
+  case "$opt" in
+    "--list-options")
+      echo --list-options
+      echo --alias-key
+      echo --role-name
+      echo --external-id
+      echo --token-code
+      echo --stream-name
+      exit
+      ;;
+    "--alias-key")
+      if [ -n "$2" ]; then
+        alias_key="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--role-name")
+      if [ -n "$2" ]; then
+        role_name="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--external-id")
+      if [ -n "$2" ]; then
+        external_id="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--token-code")
+      if [ -n "$2" ]; then
+        token_code="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--stream-name")
+      if [ -n "$2" ]; then
+        stream_name="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+  esac
+done
+
+
+map=$(cat $SAW_DIR_CONF/accounts.json)
+
+alias_key=${alias_key:-"$(echo $map | jq -r .default.alias_key)"}
+role_name=${role_name:-"$(echo $map | jq -r .default.role_name)"}
+external_id=${external_id:-"$(echo $map | jq -r .default.external_id)"}
+token_code=${token_code:-""}
+
+
+if [ -z "$SAW_DEFAULT_PROFILE" ]; then
+  profile="${alias_key}-${role_name}"
+  saw iam assume-role --alias-key $alias_key --role-name $role_name --external-id $external_id --token-code $token_code > /dev/null
+else
+  profile="$SAW_DEFAULT_PROFILE"
+fi
+
+
+if [ -z "$stream_name" ]; then
+  stream_name=$(saw kinesis list-streams --alias-key $alias_key --role-name $role_name --external-id $external_id --token-code $token_code)
+fi
+
+
+shards=$(aws kinesis describe-stream --profile $profile --stream-name $stream_name --query 'StreamDescription.Shards' | jq -r 'map({id:.ShardId,key_range:{start:.HashKeyRange.StartingHashKey,end:.HashKeyRange.EndingHashKey},seq_range:{start:.SequenceNumberRange.StartingSequenceNumber,end:.SequenceNumberRange.EndingSequenceNumber},parent:.ParentShardId,adjacent:.AdjacentParentShardId})')
+
+
+list=$(echo "$shards" | jq -r '.[]|"\(.id) \(.key_range.start) \(.key_range.end) \(.seq_range.start) \(.seq_range.end) \(.parent) \(.adjacent)"')
+[ -z "$list" ] && exit 1
+
+
+while read id k_start k_end s_start s_end parent adjacent; do
+  id=$((10#${id#shardId-}))
+  [ "$parent" != 'null' ] && parent=$((10#${parent#shardId-}))
+  [ "$adjacent" != 'null' ] && adjacent=$((10#${adjacent#shardId-}))
+
+  ancestor='-'
+  reshard='-'
+  if   [ "$parent" != 'null' -a "$adjacent" != 'null' ]; then
+    ancestor="$parent+$adjacent"
+    reshard=">"
+  elif [ "$parent" != 'null' ]; then
+    ancestor="$parent"
+    reshard="<"
+  fi
+
+  [ "$s_end" == 'null' ] && status='OPEN' || status='CLOSED'
+
+  row="$ancestor $reshard $id $status $k_start $k_end $s_start $s_end"
+  echo $row | awk '{printf("%7s %s %3s %-6s %40s %40s %s %s\n",$1,$2,$3,$4,$5,$6,$7,$8)}'
+done < <(echo "$list") | peco

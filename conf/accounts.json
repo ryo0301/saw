@@ -1,0 +1,12 @@
+{
+  "default": {
+    "profile": "default",
+    "region": "ap-northeast-1"
+  },
+  "accounts": {
+    "mykey": {
+      "account_id": "000000000000",
+      "account_alias": "accountalias"
+    }
+  }
+}
