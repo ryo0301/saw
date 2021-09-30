@@ -9,6 +9,7 @@ for opt in "$@"; do
       echo --list-options
       echo --profile
       echo --no-cache
+      echo --output
       exit
       ;;
     "--profile")
@@ -23,12 +24,21 @@ for opt in "$@"; do
       nocache=1
       shift 1
       ;;
+    "--output")
+      if [ -n "$2" ]; then
+        output="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
   esac
 done
 
 
 profile=${profile:-"default"}
 nocache=${nocache:-0}
+output=${output:-""}
 
 if [ -n "$SAW_DIR_CACHE" ]; then
   cache_prefix="$SAW_DIR_CACHE/ec2/${profile}"
@@ -45,8 +55,8 @@ elif [ -z "$(find $cache_path -mmin -60)" ]; then
 fi
 
 if [ $do_desc_instances -eq 1 ]; then
-  query='Reservations[].Instances[].{"1instance-id":InstanceId,"2name":Tags[?Key==`Name`].Value|[0],"3state":State.Name,"4private-ip":PrivateIpAddress,"5az":Placement.AvailabilityZone,"6instance-type":InstanceType,"7launch-time":LaunchTime,"8public-ip":PublicIpAddress}|sort_by(@,&"7launch-time")|reverse(@)'
-  list=$(aws ec2 describe-instances --profile "$profile" --query "$query" --output text)
+  query='Reservations[].Instances[].{"instanceid":InstanceId,"name":Tags[?Key==`Name`].Value|[0],"state":State.Name,"privateip":PrivateIpAddress,"az":Placement.AvailabilityZone,"instancetype":InstanceType,"launchtime":LaunchTime,"tags":Tags}|sort_by(@,&"launchtime")|reverse(@)'
+  list=$(aws ec2 describe-instances --profile "$profile" --query "$query" --output json | jq '.[]|.tags = (.tags|from_entries)')
   if [ -n "$cache_path" ]; then
     mkdir -p $cache_prefix
     echo "$list" > $cache_path
@@ -55,4 +65,8 @@ else
   list=$(cat $cache_path)
 fi
 
-echo "$list" | awk '{print $1,$2,$3,$4,$5,$6,substr($7,0,19),$8}' | column -t | peco
+if [ "$output" = "json" ]; then
+  echo "$list"
+else
+  echo "$list" | jq -r '.launchtime = (.launchtime[:19])|.tags = (.tags|to_entries|[.[].value]|join("/"))|to_entries|[.[].value|.//"--"]|join(",")' | column -t -s ',' | peco
+fi

@@ -72,10 +72,12 @@ else
   nocache_param=""
 fi
 
-instance=$(saw ec2 list-instances --profile $profile $nocache_param)
+instances=$(saw ec2 list-instances --profile $profile --output json $nocache_param)
+[ -z "$instances" ] && exit
+instance=$(echo "$instances" | jq -r '.launchtime = (.launchtime[:19])|.tags = (.tags|to_entries|[.[].value]|join("/"))|to_entries|[.[].value|.//"--"]|join(",")' | column -t -s ',' | peco)
 [ -z "$instance" ] && exit
 instance_id=$(echo "$instance" | awk '{print $1}')
-az=$(echo "$instance" | awk '{print $5}')
+az=$(jq -r "select(.instanceid == \"$instance_id\")|.az" <<< "$instances")
 
 echo "Generating key pair..."
 temp_path=$(mktemp -u ~/.ssh/tmp.XXXXXXXXXX)
