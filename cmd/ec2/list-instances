@@ -56,7 +56,7 @@ fi
 
 if [ $do_desc_instances -eq 1 ]; then
   query='Reservations[].Instances[].{"instanceid":InstanceId,"name":Tags[?Key==`Name`].Value|[0],"state":State.Name,"privateip":PrivateIpAddress,"az":Placement.AvailabilityZone,"instancetype":InstanceType,"launchtime":LaunchTime,"tags":Tags}|sort_by(@,&"launchtime")|reverse(@)'
-  list=$(aws ec2 describe-instances --profile "$profile" --query "$query" --output json | jq '.[]|.tags = (.tags|from_entries)')
+  list=$(aws ec2 describe-instances --profile "$profile" --query "$query" --output json | jq '.[]|.tags = (.tags//[]|from_entries)')
   if [ -n "$cache_path" ]; then
     mkdir -p $cache_prefix
     echo "$list" > $cache_path
@@ -68,5 +68,5 @@ fi
 if [ "$output" = "json" ]; then
   echo "$list"
 else
-  echo "$list" | jq -r '.launchtime = (.launchtime[:19])|.tags = (.tags|to_entries|[.[].value]|join("/"))|to_entries|[.[].value|.//"--"]|join(",")' | column -t -s ',' | peco
+  echo "$list" | jq -r '.launchtime = (.launchtime[:19])|.tags = (.tags//[]|to_entries|[.[].value]|join("/"))|to_entries|[.[].value|.//"--"]|join(",")' | column -t -s ',' | peco
 fi
