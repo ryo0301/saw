@@ -98,22 +98,23 @@ case "$forward" in
   local)
     date
     echo "localhost:$local_port -> remotehost:$remote_port"
+    echo "http://localhost:$local_port"
     $ssh_cmd \
-    -o ProxyCommand="$proxy_cmd" \
-    -N -L $local_port:localhost:$remote_port \
-    $instance_id
+      -o ProxyCommand="$proxy_cmd" \
+      -N -L $local_port:localhost:$remote_port \
+      $instance_id
     ;;
   remote)
     date
     echo "remotehost:$remote_port -> localhost:$local_port"
     $ssh_cmd \
-    -o ProxyCommand="$proxy_cmd" \
-    -N -R $remote_port:localhost:$local_port \
-    $instance_id
+      -o ProxyCommand="$proxy_cmd" \
+      -N -R $remote_port:localhost:$local_port \
+      $instance_id
     ;;
   *)
     $ssh_cmd \
-    -o ProxyCommand="$proxy_cmd" \
-    $instance_id
+      -o ProxyCommand="$proxy_cmd" \
+      $instance_id
     ;;
 esac
