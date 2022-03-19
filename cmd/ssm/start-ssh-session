@@ -12,6 +12,7 @@ for opt in "$@"; do
       echo --forward
       echo --local-port
       echo --remote-port
+      echo --remote-host
       exit
       ;;
     "--profile")
@@ -54,6 +55,14 @@ for opt in "$@"; do
         shift 1
       fi
       ;;
+    "--remote-host")
+      if [ -n "$2" ]; then
+        remote_host="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
   esac
 done
 
@@ -64,6 +73,7 @@ os_user=${os_user:-"ec2-user"}
 forward=${forward:-""}
 local_port=${local_port:-"3000"}
 remote_port=${remote_port:-"3000"}
+remote_host=${remote_host:-"localhost"}
 
 
 if [ $nocache -eq 1 ]; then
@@ -97,11 +107,11 @@ ssh_cmd="ssh -i $temp_path -l $os_user -o StrictHostKeyChecking=no -o UserKnownH
 case "$forward" in
   local)
     date
-    echo "localhost:$local_port -> remotehost:$remote_port"
+    echo "localhost:$local_port -> $remote_host:$remote_port"
     echo "http://localhost:$local_port"
     $ssh_cmd \
       -o ProxyCommand="$proxy_cmd" \
-      -N -L $local_port:localhost:$remote_port \
+      -N -L $local_port:$remote_host:$remote_port \
       $instance_id
     ;;
   remote)
