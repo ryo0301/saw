@@ -9,6 +9,10 @@ for opt in "$@"; do
       echo --list-options
       echo --profile
       echo --no-cache
+      echo --forward
+      echo --local-port
+      echo --remote-port
+      echo --remote-host
       exit
       ;;
     "--profile")
@@ -23,12 +27,52 @@ for opt in "$@"; do
       nocache=1
       shift 1
       ;;
+    "--forward")
+      if [ -n "$2" ]; then
+        case "$2" in
+          local|remote)
+            forward="$2"
+            ;;
+        esac
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--local-port")
+      if [ -n "$2" ]; then
+        local_port="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--remote-port")
+      if [ -n "$2" ]; then
+        remote_port="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--remote-host")
+      if [ -n "$2" ]; then
+        remote_host="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
   esac
 done
 
 
 profile=${profile:-"default"}
 nocache=${nocache:-0}
+forward=${forward:-""}
+local_port=${local_port:-"3000"}
+remote_port=${remote_port:-"3000"}
+remote_host=${remote_host:-""}
 
 
 if [ $nocache -eq 1 ]; then
@@ -38,7 +82,21 @@ else
 fi
 
 instance_id=$(saw ec2 list-instances --profile $profile $nocache_param | awk '{print $1}')
+[ -z "$instance_id" ] && exit 1
 
-if [ -n "$instance_id" ]; then
-  aws ssm start-session --profile $profile --target $instance_id
+
+set -x
+
+
+if [ "$forward" = "local" ]; then
+  if [ -n "$remote_host" ]; then
+    document="AWS-StartPortForwardingSessionToRemoteHost"
+    params=$(printf '{"host":["%s"],"portNumber":["%s"],"localPortNumber":["%s"]}' $remote_host $remote_port $local_port)
+  else
+    document="AWS-StartPortForwardingSession"
+    params=$(printf '{"portNumber":["%s"],"localPortNumber":["%s"]}' $remote_port $local_port)
+  fi
+  forward_opt=" --document-name $document --parameters $params"
 fi
+
+aws ssm start-session --profile $profile --target ${instance_id}${forward_opt}
