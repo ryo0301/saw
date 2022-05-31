@@ -84,10 +84,6 @@ fi
 instance_id=$(saw ec2 list-instances --profile $profile $nocache_param | awk '{print $1}')
 [ -z "$instance_id" ] && exit 1
 
-
-set -x
-
-
 if [ "$forward" = "local" ]; then
   if [ -n "$remote_host" ]; then
     document="AWS-StartPortForwardingSessionToRemoteHost"
