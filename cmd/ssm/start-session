@@ -95,4 +95,5 @@ if [ "$forward" = "local" ]; then
   forward_opt=" --document-name $document --parameters $params"
 fi
 
+echo Connect to $instance_id ...
 aws ssm start-session --profile $profile --target ${instance_id}${forward_opt}
