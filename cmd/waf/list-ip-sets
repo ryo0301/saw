@@ -53,5 +53,5 @@ list=$(
 )
 
 if [ -n "$list" ]; then
-  echo "$list" | peco
+  echo "$list" | fzf
 fi

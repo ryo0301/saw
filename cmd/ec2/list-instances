@@ -68,5 +68,7 @@ fi
 if [ "$output" = "json" ]; then
   echo "$list"
 else
-  echo "$list" | jq -r '.launchtime = (.launchtime[:19])|.tags = (.tags//[]|to_entries|[.[].value]|join("/"))|to_entries|[.[].value|.//"--"]|join(",")' | column -t -s ',' | peco
+  q='.launchtime = (.launchtime[:19])|.tags = (.tags//[]|to_entries|[.[].value]|join("/"))|to_entries|[.[].value|.//"--"]|join(",")'
+  p='echo {1,2}\t$(tput setaf $([ {3} = running ] && echo 2 || echo 1)){3}$(tput sgr 0)\n\n{4,5}\n{6}\n{7}\n;echo {8} | tr / "\n" | sort -r | uniq | sed -e "/^\$/d" -e "s/^/- /"'
+  echo "$list" | jq -r "$q" | column -t -s ',' | fzf --exact --preview "$p"
 fi

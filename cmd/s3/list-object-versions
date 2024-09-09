@@ -47,7 +47,7 @@ query='Versions[].{"key":Key,"version-id":VersionId,"last-modified":LastModified
 list=$(aws s3api list-object-versions --profile $profile --bucket $bucket --prefix $prefix --query $query --output text)
 
 if [ $? -eq 0 ]; then
-  echo "$list" | peco
+  echo "$list" | fzf
 else
   echo "$list"
 fi
