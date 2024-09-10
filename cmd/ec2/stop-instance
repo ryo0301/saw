@@ -1,0 +1,52 @@
+#!/bin/bash
+
+set -o pipefail
+set -e
+
+for opt in "$@"; do
+  case "$opt" in
+    "--list-options")
+      echo --list-options
+      echo --profile
+      echo --no-cache
+      exit
+      ;;
+    "--profile")
+      if [ -n "$2" ]; then
+        profile="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--no-cache")
+      nocache=1
+      shift 1
+      ;;
+  esac
+done
+
+
+profile=${profile:-"default"}
+nocache=${nocache:-0}
+
+
+if [ $nocache -eq 1 ]; then
+  nocache_param="--no-cache"
+else
+  nocache_param=""
+fi
+
+instance=$(saw ec2 list-instances --profile $profile $nocache_param)
+[ -z "$instance" ] && exit 1
+
+echo $instance | awk '{ print $1,$2,$3,"\n",$4,$5,$6,"\n",$7 }' | column -t
+echo $instance | awk '{ print $8 }' | tr / "\n" | sort -r | uniq | sed -e "/^\$/d" -e "s/^/- /"
+echo
+read -p "Do you want to stop this instance? (y/n): " yn
+case "$yn" in [yY]*) ;; *) exit ;; esac
+
+instance_id=$(echo $instance | awk '{ print $1 }')
+[ -z "$instance_id" ] && exit 1
+
+aws ec2 stop-instances --profile $profile --instance-ids $instance_id

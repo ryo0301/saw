@@ -1,0 +1,43 @@
+#!/bin/bash
+
+set -o pipefail
+set -e
+
+for opt in "$@"; do
+  case "$opt" in
+    "--list-options")
+      echo --list-options
+      echo --profile
+      echo --no-cache
+      exit
+      ;;
+    "--profile")
+      if [ -n "$2" ]; then
+        profile="$2"
+        shift 2
+      else
+        shift 1
+      fi
+      ;;
+    "--no-cache")
+      nocache=1
+      shift 1
+      ;;
+  esac
+done
+
+
+profile=${profile:-"default"}
+nocache=${nocache:-0}
+
+
+if [ $nocache -eq 1 ]; then
+  nocache_param="--no-cache"
+else
+  nocache_param=""
+fi
+
+instance_id=$(saw ec2 list-instances --profile $profile $nocache_param | awk '{ print $1 }')
+[ -z "$instance_id" ] && exit 1
+
+aws ec2 start-instances --profile $profile --instance-ids $instance_id
