@@ -54,8 +54,17 @@ elif [ -z "$(find $cache_path -mmin -60)" ]; then
   do_desc_instances=1
 fi
 
+# 1. instanceid
+# 2. name
+# 3. state
+# 4. privateip
+# 5. az
+# 6. instancetype
+# 7. lifecycle
+# 8. launchtime
+# 9. tags
 if [ $do_desc_instances -eq 1 ]; then
-  query='Reservations[].Instances[].{"instanceid":InstanceId,"name":Tags[?Key==`Name`].Value|[0],"state":State.Name,"privateip":PrivateIpAddress,"az":Placement.AvailabilityZone,"instancetype":InstanceType,"launchtime":LaunchTime,"tags":Tags}|sort_by(@,&"launchtime")|reverse(@)'
+  query='Reservations[].Instances[].{"instanceid":InstanceId,"name":Tags[?Key==`Name`].Value|[0],"state":State.Name,"privateip":PrivateIpAddress,"az":Placement.AvailabilityZone,"instancetype":InstanceType,"lifecycle":InstanceLifecycle,"launchtime":LaunchTime,"tags":Tags}|sort_by(@,&"launchtime")|reverse(@)'
   list=$(aws ec2 describe-instances --profile "$profile" --query "$query" --output json | jq '.[]|.tags = (.tags//[]|from_entries)')
   if [ -n "$cache_path" ]; then
     mkdir -p $cache_prefix
@@ -69,6 +78,6 @@ if [ "$output" = "json" ]; then
   echo "$list"
 else
   q='.launchtime = (.launchtime[:19])|.tags = (.tags//[]|to_entries|[.[].value]|join("/"))|to_entries|[.[].value|.//"--"]|join(",")'
-  p='echo {1,2}\t$(tput setaf $([ {3} = running ] && echo 2 || echo 1)){3}$(tput sgr 0)\n\n{4,5}\n{6}\n{7}\n;echo {8} | tr / "\n" | sort -r | uniq | sed -e "/^\$/d" -e "s/^/- /"'
+  p='echo {1,2}\t$(tput setaf $([ {3} = running ] && echo 2 || echo 1)){3}$(tput sgr 0)\n\n{4,5}\n{6} \({7}\)\n{8}\n;echo {9} | tr / "\n" | sort -r | uniq | sed -e "/^\$/d" -e "s/^/- /"'
   echo "$list" | jq -r "$q" | column -t -s ',' | fzf --exact --preview "$p"
 fi
